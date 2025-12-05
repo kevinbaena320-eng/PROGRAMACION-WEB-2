@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Calculadora</title>
+  <style>
+  
+    body {
+      font-family: Arial, Helvetica, sans-serif;
+      max-width: 640px;
+      margin: 36px auto;
+      padding: 18px;
+      line-height: 1.4;
+      color: #111;
+    }
+
+    h1 { margin-bottom: 8px; font-size: 1.4rem; }
+    .card {
+      border: 1px solid #ddd;
+      border-radius: 8px;
+      padding: 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.03);
+      margin-bottom: 12px;
+    }
+
+    .row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .row input[type="number"], .row select, .row input[type="text"] {
+      flex: 1 1 auto;
+      padding: 8px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      font-size: 0.95rem;
+    }
+
+    button {
+      padding: 8px 12px;
+      border-radius: 6px;
+      border: none;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    button.secondary {
+      background: #6b7280;
+    }
+    button.small {
+      padding: 6px 8px;
+      font-size: 0.9rem;
+    }
+
+    pre {
+      background: #f8fafc;
+      border: 1px dashed #e5e7eb;
+      padding: 10px;
+      border-radius: 6px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+
+    .hint { font-size: 0.9rem; color: #4b5563; margin-top: 6px; }
+  </style>
+</head>
+<body>
+  <h1>Calculadora</h1>
+
+  <div class="card">
+    <strong>Calcular</strong>
+    <div class="row" style="margin-top:8px;">
+      <input id="num1" type="number" placeholder="Número 1">
+      <select id="operacion" title="Operación" style="width:86px;">
+        <option value="+">+</option>
+        <option value="-">−</option>
+        <option value="*">×</option>
+        <option value="/">÷</option>
+      </select>
+      <input id="num2" type="number" placeholder="Número 2">
+      <button onclick="hacerPost()">Calcular</button>
+    </div>
+    <pre id="resultadoPost">Resultado: —</pre>
+  </div>
+
+  <div class="card">
+    <strong>Obtener último resultado (GET)</strong>
+    <div class="row">
+      <button onclick="hacerGet()">Obtener</button>
+    </div>
+    <pre id="resultadoGet">Último: —</pre>
+  </div>
+
+
+  <div class="card">
+    <strong>Eliminar resultado</strong>
+    <div class="row">
+      <button onclick="hacerDelete()">Eliminar último resultado</button>
+    </div>
+    <pre id="resultadoDelete">Eliminado: —</pre>
+  </div>
+
+  <script>
+  
+    const urlBase = "http://127.0.0.1:5000/api";
+
+ 
+    function mostrar(id, obj) {
+      const el = document.getElementById(id);
+      el.textContent = typeof obj === "string" ? obj : JSON.stringify(obj, null, 2);
+    }
+
+    async function hacerPost() {
+      const n1 = parseFloat(document.getElementById("num1").value);
+      const n2 = parseFloat(document.getElementById("num2").value);
+      const op = document.getElementById("operacion").value;
+
+ 
+      if (Number.isNaN(n1) || Number.isNaN(n2)) {
+        mostrar("resultadoPost", "Error: ingresa ambos números.");
+        return;
+      }
+
+      try {
+        const res = await fetch(`${urlBase}/post`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ num1: n1, num2: n2, operacion: op })
+        });
+
+        const data = await res.json();
+        if (!res.ok) {
+          mostrar("resultadoPost", data);
+        } else {
+          mostrar("resultadoPost", "Resultado: " + (data.resultado ?? JSON.stringify(data)));
+          mostrar("resultadoGet", "Último: " + (data.resultado ?? "—"));
+        }
+      } catch (err) {
+        mostrar("resultadoPost", "Error de red: " + err);
+      }
+    }
+
+    async function hacerGet() {
+      try {
+        const res = await fetch(`${urlBase}/get`);
+        const data = await res.json();
+        if (!res.ok) {
+          mostrar("resultadoGet", data);
+        } else {
+          mostrar("resultadoGet", data.resultado ?? "—");
+        }
+      } catch (err) {
+        mostrar("resultadoGet", "Error de red: " + err);
+      }
+    }
+
+    async function hacerDelete() {
+      try {
+        const res = await fetch(`${urlBase}/delete`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" }
+        });
+        const data = await res.json();
+        mostrar("resultadoDelete", res.ok ? ("Eliminado: " + (data.eliminado ?? JSON.stringify(data))) : data);
+        if (res.ok) mostrar("resultadoGet", "Último: —");
+      } catch (err) {
+        mostrar("resultadoDelete", "Error de red: " + err);
+      }
+    }
+
+  </script>
+</body>
+</html>
