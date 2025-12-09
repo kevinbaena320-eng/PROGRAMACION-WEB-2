@@ -3,7 +3,6 @@ from flask_cors import CORS
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime
-from flask_mail import Mail, Message
 import mercadopago
 import random
 from datetime import timedelta
@@ -29,7 +28,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 #app.config['MAIL_USERNAME'] = 'kevinbaena320@gmail.com'
 #app.config['MAIL_PASSWORD'] = 'mbaw xnsp faec kwfy'  # usa contraseña de app (Gmail)
 
-mail = Mail(app)
 
 db = SQLAlchemy(app)
 
