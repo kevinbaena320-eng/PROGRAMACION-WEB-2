@@ -9,7 +9,21 @@ from datetime import timedelta
 import os
 
 app = Flask(__name__)
-CORS(app)
+
+# CORS CONFIG CORRECTO
+CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+
+# MANEJO GLOBAL DE OPTIONS → SOLUCIONA EL ERROR 404 EN OPTIONS
+@app.before_request
+def handle_options():
+    if request.method == "OPTIONS":
+        response = app.make_default_options_response()
+        headers = response.headers
+        headers['Access-Control-Allow-Origin'] = '*'
+        headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+        headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        return response
+
 sdk = mercadopago.SDK("TEST-4267539412609633-112610-ab8635bd81d4c4c8ff768d6d7d18a939-652880717")
 
 DB_USER = 'root'
@@ -17,17 +31,8 @@ DB_PASSWORD = 'UPmwNiLcUKfDcUBUbpYiwulOlmIuNEai'
 DB_HOST = 'crossover.proxy.rlwy.net:24110'
 DB_NAME = 'poryecto'
 
-#app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
 app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
-#app.config['MAIL_SERVER'] = 'smtp.gmail.com'
-#app.config['MAIL_PORT'] = 465
-#app.config['MAIL_USE_TLS'] = True
-#app.config['MAIL_USE_SSL'] = False
-#app.config['MAIL_USERNAME'] = 'kevinbaena320@gmail.com'
-#app.config['MAIL_PASSWORD'] = 'mbaw xnsp faec kwfy'  # usa contraseña de app (Gmail)
-
 
 db = SQLAlchemy(app)
 
@@ -48,6 +53,7 @@ class Cancion(db.Model):
             'duracion': self.duracion,
             'url_imagen': self.url_imagen
         }
+
 class Usuario(db.Model):
     __tablename__ = 'usuarios'
     
@@ -64,7 +70,8 @@ class Usuario(db.Model):
             'nombre': self.nombre,
             'correo': self.correo,
             'tipo_usuario': self.tipo_usuario
-        } 
+        }
+
 class TwoFACode(db.Model):
     __tablename__ = 'twofa_codes'
     
@@ -74,19 +81,15 @@ class TwoFACode(db.Model):
     expires_at = db.Column(db.DateTime, nullable=False)
 
 
-@app.route('/processpayment', methods=['POST'])
+@app.route('/processpayment', methods=['POST', 'OPTIONS'])
 def processPayment():
     parameters = request.get_json(silent=True)
 
     payment = parameters.get('formdata')
-    idcarrito = parameters.get('idfoliocarrito')
     iddevice = parameters.get('iddevice')
 
     if not payment.get('token'):
         return jsonify({"error": "Faltan datos obligatorios"}), 400
-
-    # PROCESAR LA COMPRA Y REGISTRAR O MODIFICAR LA BASE DE DATO
-    # DE ACUERDO A LA LOGICA DE NEGOCIO
 
     amount = payment.get('transaction_amount')
     email = payment.get('payer').get('email')
@@ -94,149 +97,84 @@ def processPayment():
     payment_data = {
         "transaction_amount": float(amount),
         "token": payment.get('token'),
-        "payment_method_id" : payment.get('payment_method_id'),
-        "issuer_id" : payment.get('issuer_id'),
-        "description": "Descripcion del pago a Realizar",
-        "installments": 1, # pago en una sola exhibición
-        "statement_descriptor" : 'Description',
+        "payment_method_id": payment.get('payment_method_id'),
+        "issuer_id": payment.get('issuer_id'),
+        "description": "Descripcion del pago",
+        "installments": 1,
+        "statement_descriptor": "Description",
         "payer": {
-        "first_name" : 'Jonathan',
-        "last_name": "Guevara",
-        "email": email,
-    },
-    "additional_info": {
-    "items": [
-    {
-    "title": "Nombre del Producto",
-    "quantity": 1,
-    "unit_price": float(amount)
-    }
-    ]
-    },
-    "capture" : True,
-    "binary_mode": False, # evita pagos pendientes: solo aprueba o rechaza
-    # "device_id": iddevice
-    }
-
-
-    request_options = RequestOptions()
-    import uuid
-    UUID = str(uuid.uuid4())
-
-    request_options.custom_headers = {
-    "X-Idempotency-Key": UUID,
-    "X-meli-session-id": iddevice
-    }
-
-    result = sdk.payment().create(payment_data, request_options)
-    payment = result.get("response", {})
-
-    if( payment.get("status") == 'approved' and payment.get('status_detail') == 'accredited' ):
-    # PROCESAR SUS DATOS EN LA BD O LO QUE TENGAN QUE HACER
-    # DAR RESPUESTA
-        respuesta = {
-            "mensaje" : "Mensaje de Exito",
-            "status" : "success",
-            'data': payment
-    }
-
-        return jsonify(respuesta), 200
-    else:
-
-        respuesta = {
-            "mensaje" : "Mensaje de Error",
-            "status" : "error",
-            'data': payment
-    }
-
-    return jsonify(respuesta), 400
-
-@app.route("/preferencemp", methods=["GET"])
-def crear_preferecia():
-
-    preference_data = {
-        "items": [
-            {
-            "tittle" : "Nombre del Producto",
-            "quantity" : 1,
-            "unit_price" : 100.00
-            }
-        ],
-
-        "back_urls": {
-            "success": "https://carpinteriareyna.com/success",
-            "failure": "https://carpinteriareyna.com/failure",
-            "pending": "https://carpinteriareyna.com/pending",            
+            "first_name": "Jonathan",
+            "last_name": "Guevara",
+            "email": email,
         },
-       #"auto_return": "approved",
+        "additional_info": {
+            "items": [
+                {
+                    "title": "Producto",
+                    "quantity": 1,
+                    "unit_price": float(amount)
+                }
+            ]
+        },
+        "capture": True,
+        "binary_mode": False
     }
-    #crear preferecia
-    preference_response = sdk.preference().create(preference_data)
-    preference = preference_response["response"]
 
-    data = {
-        "id": preference["id"],
-        "init_point": preference["init_point"],
-        "sandbox_init_point": preference["sandbox_init_point"] 
+    try:
+        result = sdk.payment().create(payment_data)
+        payment = result.get("response", {})
+    except Exception as e:
+        return jsonify({"mensaje": f"Error MercadoPago: {e}", "status": "error"}), 500
 
-    }
-    respuesta = {
-        "mensaje": "Mensaje de exito",
-        "status": "success",
-        'data': data
-    }
-    return jsonify(respuesta), 200
+    if payment.get("status") == "approved":
+        return jsonify({
+            "mensaje": "Pago exitoso",
+            "status": "success",
+            'data': payment
+        }), 200
+    else:
+        return jsonify({
+            "mensaje": "Pago rechazado",
+            "status": "error",
+            'data': payment
+        }), 400
 
-@app.route('/site/register', methods=['POST'])
+
+@app.route('/site/register', methods=['POST', 'OPTIONS'])
 def register():
     try:
         data = request.get_json()
         nombre = data.get('nombre')
         correo = data.get('correo')
-        password_plano = data.get('password') 
-        
-        tipo_usuario = data.get('tipo_usuario', 'usuario_regular') 
+        password_plano = data.get('password')
+        tipo_usuario = data.get('tipo_usuario', 'usuario_regular')
 
         if not nombre or not correo or not password_plano:
-            return jsonify({
-                "mensaje": "Faltan datos requeridos (nombre, correo o password)",
-                "status": "error"
-            }), 400
+            return jsonify({"mensaje": "Faltan datos", "status": "error"}), 400
 
         if Usuario.query.filter_by(correo=correo).first():
-            return jsonify({
-                "mensaje": f"El correo '{correo}' ya está registrado.",
-                "status": "error"
-            }), 409 
+            return jsonify({"mensaje": "Correo ya registrado", "status": "error"}), 409
 
         hashed_password = generate_password_hash(password_plano)
-        
-        new_user = Usuario(
+
+        nuevo = Usuario(
             nombre=nombre,
             correo=correo,
-            contraseña_hash=hashed_password, 
-            fecha_registro=datetime.now(), 
+            contraseña_hash=hashed_password,
+            fecha_registro=datetime.now(),
             tipo_usuario=tipo_usuario
         )
 
-        db.session.add(new_user)
+        db.session.add(nuevo)
         db.session.commit()
-        db.session.refresh(new_user)
 
-        return jsonify({
-            "mensaje": f"Usuario {new_user.nombre} registrado exitosamente.",
-            "status": "success",
-        }), 201 
+        return jsonify({"mensaje": "Usuario registrado", "status": "success"}), 201
 
     except Exception as e:
-        db.session.rollback() 
-        print(f"ERROR PYMYSQL AL REGISTRAR: {e}")
-        return jsonify({
-            "mensaje": f"Error interno al registrar usuario: {e}",
-            "status": "error"
-        }), 500
+        return jsonify({"mensaje": f"Error interno: {e}", "status": "error"}), 500
 
-@app.route('/site/login', methods=['POST'])
+
+@app.route('/site/login', methods=['POST', 'OPTIONS'])
 def login_step1():
     try:
         data = request.get_json()
@@ -251,39 +189,34 @@ def login_step1():
         if not user or not check_password_hash(user.contraseña_hash, password):
             return jsonify({"mensaje": "Credenciales inválidas", "status": "error"}), 401
 
-        # ---------- GENERAR CÓDIGO ----------
         code = str(random.randint(100000, 999999))
         expiration = datetime.now() + timedelta(minutes=5)
 
-        # GUARDAR EN LA BD
-        twofa_record = TwoFACode(user_id=user.id_usuarios, code=code, expires_at=expiration)
-        db.session.add(twofa_record)
+        record = TwoFACode(user_id=user.id_usuarios, code=code, expires_at=expiration)
+        db.session.add(record)
         db.session.commit()
 
-        # 🔥 MOSTRAR EL CÓDIGO EN CONSOLA
-        print("\n==============================")
-        print(f"💡 CÓDIGO 2FA PARA {email}: {code}")
-        print("==============================\n")
+        print("\n====== CÓDIGO 2FA ======")
+        print(f"Email: {email}")
+        print(f"Code: {code}")
+        print("========================\n")
 
         return jsonify({
-            "mensaje": "Se requiere verificación 2FA",
+            "mensaje": "Se requiere 2FA",
             "status": "2fa_required",
-            "user_id": user.id_usuarios,
-            "debug_code": code  # <-- Puedes quitar esto si deseas
+            "user_id": user.id_usuarios
         }), 200
 
     except Exception as e:
         return jsonify({"mensaje": f"Error interno: {e}", "status": "error"}), 500
 
-@app.route('/site/verify_2fa', methods=['POST'])
+
+@app.route('/site/verify_2fa', methods=['POST', 'OPTIONS'])
 def verify_2fa():
     try:
         data = request.get_json()
         user_id = data.get('user_id')
         code = data.get('code')
-
-        if not user_id or not code:
-            return jsonify({"mensaje": "Datos incompletos", "status": "error"}), 400
 
         record = TwoFACode.query.filter_by(user_id=user_id, code=code).first()
 
@@ -300,77 +233,47 @@ def verify_2fa():
         db.session.commit()
 
         return jsonify({
-            "mensaje": "Autenticación exitosa",
+            "mensaje": "Login exitoso",
             "status": "success",
             "token": token,
-            "user_info": user.to_dict()
+            "user": user.to_dict()
         }), 200
 
     except Exception as e:
         return jsonify({"mensaje": f"Error interno: {e}", "status": "error"}), 500
 
 
-@app.route('/store/products/<int:producto_id>', methods=["GET"])
+@app.route('/store/products/<int:producto_id>', methods=["GET", "OPTIONS"])
 def getProducto(producto_id):
     try:
-        producto = Cancion.query.get(producto_id)   # ← CORREGIDO AQUÍ
+        producto = Cancion.query.get(producto_id)
 
         if producto is None:
-            return jsonify({
-                "mensaje": f"Cancion con ID {producto_id} no encontrada",
-                "status": "error",
-                "data": None
-            }), 404
+            return jsonify({"mensaje": "Canción no encontrada", "status": "error"}), 404
 
-        respuesta = {
-            "mensaje": f"Detalle de la cancion ID {producto_id} obtenido con exito",
-            "status" : "success",
-            "data" : producto.to_dict()
-        }
-
-        return jsonify(respuesta), 200
-
-    except Exception as e:
         return jsonify({
-            "mensaje": f"Error al obtener el producto: {e}",
-            "status": "error",
-            "data": None
-        }), 500
-    except Exception as e:
-            return jsonify({
-                "mensaje": f"Error al obtener el producto: {e}",
-                "status": "error",
-                "data": None
-            }),500
+            "mensaje": "Producto encontrado",
+            "status": "success",
+            "data": producto.to_dict()
+        }), 200
 
-@app.route('/store/products', methods=['GET'])
+    except Exception as e:
+        return jsonify({"mensaje": f"Error interno: {e}", "status": "error"}), 500
+
+
+@app.route('/store/products', methods=['GET', 'OPTIONS'])
 def getProducts():
-
-    try: 
-        canciones_db = Cancion.query.all()
-        canciones_json = [cancion.to_dict() for cancion in canciones_db]
-
-        respuesta = {
-            "mensaje": f"Lista de {len(canciones_json)} cancion obtenida de poryecto",
-            "status" : "success",
-            "data" : canciones_json
-        }
-        return jsonify(respuesta),200
-    except Exception as e:
+    try:
+        canciones = Cancion.query.all()
         return jsonify({
-            "mensaje": f"Error al obtener productos de la BD: {e}",
-            "status": "error",
-            "data": []
-        }), 500
+            "mensaje": "Productos obtenidos",
+            "status": "success",
+            "data": [c.to_dict() for c in canciones]
+        }), 200
+    except Exception as e:
+        return jsonify({"mensaje": f"Error BD: {e}", "status": "error"}), 500
 
-    
-    respuesta = {
-        "mensaje": "Mensaje de Exito",
-        "status": "success",
-        "data": data
-    }
-
-    return jsonify(respuesta)
 
 if __name__ == '__main__':
     app.run(debug=True, threaded=True)
+
