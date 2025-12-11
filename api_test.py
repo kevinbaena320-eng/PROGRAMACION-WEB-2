@@ -14,7 +14,7 @@ sdk = mercadopago.SDK("TEST-4267539412609633-112610-ab8635bd81d4c4c8ff768d6d7d18
 
 DB_USER = 'root'
 DB_PASSWORD = 'UPmwNiLcUKfDcUBUbpYiwulOlmIuNEai'
-DB_HOST = '@crossover.proxy.rlwy.net'
+DB_HOST = 'crossover.proxy.rlwy.net:24110'
 DB_NAME = 'poryecto'
 
 #app.config['SQLALCHEMY_DATABASE_URI'] = f'mysql+pymysql://{DB_USER}:{DB_PASSWORD}@{DB_HOST}/{DB_NAME}'
